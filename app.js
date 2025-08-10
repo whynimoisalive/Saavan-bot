@@ -1,13 +1,14 @@
-// index.js
+// app.js
 // Saavan '25 — Minimalist Role Collection Bot with Email Verification
 // Auto-triggers on join, checks existing roles, single category selection
 // Student email verification via SMTP + verification code
-// Usage: create a bot, give it "Manage Roles", set .env, then: `node index.js`
-// Requires: npm i discord.js dotenv nodemailer
+// Usage: create a bot, give it "Manage Roles", set .env, then: `node app.js`
+// Requires: npm i discord.js dotenv nodemailer express
 
 "use strict";
 
 require("dotenv").config();
+const express = require("express");
 const {
   Client,
   GatewayIntentBits,
@@ -23,6 +24,32 @@ const {
 } = require("discord.js");
 
 const nodemailer = require("nodemailer");
+
+// Express server for health checks
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Health endpoint for UptimeRobot
+app.get("/health", (req, res) => {
+  res.status(200).json({ 
+    status: "ok", 
+    bot: client.user ? "online" : "offline",
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.get("/", (req, res) => {
+  res.status(200).json({ 
+    message: "Saavan'25 Discord Bot is running!",
+    bot: client.user ? client.user.tag : "Not connected",
+    uptime: process.uptime()
+  });
+});
+
+// Start Express server
+app.listen(PORT, () => {
+  console.log(`Health server running on port ${PORT}`);
+});
 
 const TOKEN = process.env.DISCORD_TOKEN;
 const GUILD_ID = process.env.GUILD_ID;
@@ -87,7 +114,7 @@ const ROLE_CATEGORIES = {
 //... (previous client and role configuration)
 
 // ====== EMAIL CONFIGURATION ======
-const transporter = nodemailer.createTransport({
+const transporter = nodemailer.createTransporter({
   host: SMTP_HOST,
   port: SMTP_PORT,
   secure: false, // true for 465, false for other ports
@@ -124,7 +151,7 @@ async function sendVerificationEmail(email, code, userName) {
           <div style="text-align:center; margin: 18px 0;">
             <div style="display:inline-block; letter-spacing: 6px; font-size: 34px; font-weight: 700; color:#0b5fff; background:#eef2ff; border:1px solid #e0e7ff; padding: 14px 18px; border-radius: 12px;">${code}</div>
           </div>
-          <p style="margin:0; color:#374151;">This code expires in <strong>10 minutes</strong>. If you didn’t request this, you can safely ignore this email.</p>
+          <p style="margin:0; color:#374151;">This code expires in <strong>10 minutes</strong>. If you didn't request this, you can safely ignore this email.</p>
         </div>
         <div style="text-align:center; color:#6b7280; font-size:12px; margin-top: 14px;">© ${new Date().getFullYear()} IITM BS Fest</div>
       </div>
@@ -443,7 +470,7 @@ async function handleButtonInteraction(interaction) {
     if (interaction.user.id !== userId) {
       await interaction.reply({ 
         content: "This setup is not for you.", 
-        flags: [4096] // MessageFlags.Ephemeral
+        ephemeral: true
       });
       return;
     }
@@ -534,7 +561,7 @@ async function resendVerificationCode(interaction) {
     if (interaction.deferred || interaction.replied) {
       await interaction.editReply({ content: "No active verification session. Please restart setup." });
     } else {
-      await interaction.reply({ content: "No active verification session. Please restart setup.", flags: [4096] });
+      await interaction.reply({ content: "No active verification session. Please restart setup.", ephemeral: true });
     }
     return;
   }
@@ -552,7 +579,7 @@ async function resendVerificationCode(interaction) {
   if (interaction.deferred || interaction.replied) {
     await interaction.editReply({ content });
   } else {
-    await interaction.reply({ content, flags: [4096] });
+    await interaction.reply({ content, ephemeral: true });
   }
 }
 
@@ -566,9 +593,9 @@ async function handleModalSubmit(interaction) {
     const studentEmail = interaction.fields.getTextInputValue("student_email");
 
     // Quick domain check: allow only IITM BS study emails
-    if (!studentEmail.toLowerCase().endsWith("@ds.study.iitm.ac.in" || studentEmail.toLowerCase().endsWith("@es.study.iitm.ac.in"))) {
+    if (!studentEmail.toLowerCase().endsWith("@ds.study.iitm.ac.in") && !studentEmail.toLowerCase().endsWith("@es.study.iitm.ac.in")) {
       await interaction.editReply({
-        content: "Please use your IITM BS student email"
+        content: "Please use your IITM BS student email (@ds.study.iitm.ac.in or @es.study.iitm.ac.in)"
       });
       return;
     }
@@ -702,7 +729,7 @@ async function showInfoConfirmation(interaction, fullName, studentEmail) {
   if (interaction.deferred || interaction.replied) {
     await interaction.editReply({ embeds: [embed], components: [button] });
   } else {
-    await interaction.reply({ embeds: [embed], components: [button], flags: [4096] });
+    await interaction.reply({ embeds: [embed], components: [button], ephemeral: true });
   }
 }
 
@@ -752,7 +779,7 @@ async function showCategoryRoles(interaction, category) {
   const roles = ROLE_CATEGORIES[category].filter(role => availableRoles.has(role));
   
   if (roles.length === 0) {
-    await interaction.update({
+    await interaction.editReply({
       content: "No roles available in this category.",
       embeds: [],
       components: []
@@ -824,7 +851,7 @@ async function toggleRole(interaction) {
   if (PROTECTED_ROLES.includes(roleName)) {
     await interaction.reply({ 
       content: "This role requires admin assignment.", 
-      flags: [4096] // MessageFlags.Ephemeral
+      ephemeral: true
     });
     return;
   }
@@ -832,7 +859,7 @@ async function toggleRole(interaction) {
   if (!availableRoles.has(roleName)) {
     await interaction.reply({ 
       content: "Role not available.", 
-      flags: [4096] // MessageFlags.Ephemeral
+      ephemeral: true
     });
     return;
   }
@@ -841,7 +868,7 @@ async function toggleRole(interaction) {
   if (!role) {
     await interaction.reply({ 
       content: "Role not found.", 
-      flags: [4096] // MessageFlags.Ephemeral
+      ephemeral: true
     });
     return;
   }
@@ -918,7 +945,7 @@ async function toggleRole(interaction) {
     if (interaction.deferred) {
       await interaction.editReply({ content: "Failed to update role." });
     } else {
-      await interaction.reply({ content: "Failed to update role.", flags: [4096] });
+      await interaction.reply({ content: "Failed to update role.", ephemeral: true });
     }
   }
 }
@@ -930,7 +957,7 @@ async function completeSetup(interaction) {
     if (interaction.deferred || interaction.replied) {
       await interaction.editReply({ content: "Setup data not found.", components: [] });
     } else {
-      await interaction.reply({ content: "Setup data not found.", flags: [4096] });
+      await interaction.reply({ content: "Setup data not found.", ephemeral: true });
     }
     return;
   }
