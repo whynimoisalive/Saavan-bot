@@ -114,7 +114,7 @@ const ROLE_CATEGORIES = {
 //... (previous client and role configuration)
 
 // ====== EMAIL CONFIGURATION ======
-const transporter = nodemailer.createTransporter({
+const transporter = nodemailer.createTransport({
   host: SMTP_HOST,
   port: SMTP_PORT,
   secure: false, // true for 465, false for other ports
